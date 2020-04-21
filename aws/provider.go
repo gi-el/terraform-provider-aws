@@ -169,6 +169,7 @@ func Provider() terraform.ResourceProvider {
 		DataSourcesMap: map[string]*schema.Resource{
 			"aws_acm_certificate":                           dataSourceAwsAcmCertificate(),
 			"aws_acmpca_certificate_authority":              dataSourceAwsAcmpcaCertificateAuthority(),
+			"aws_acmpca_private_certificate":                dataSourceAwsAcmpcaPrivateCertificate(),
 			"aws_ami":                                       dataSourceAwsAmi(),
 			"aws_ami_ids":                                   dataSourceAwsAmiIds(),
 			"aws_api_gateway_api_key":                       dataSourceAwsApiGatewayApiKey(),
@@ -339,6 +340,7 @@ func Provider() terraform.ResourceProvider {
 			"aws_acm_certificate":                                     resourceAwsAcmCertificate(),
 			"aws_acm_certificate_validation":                          resourceAwsAcmCertificateValidation(),
 			"aws_acmpca_certificate_authority":                        resourceAwsAcmpcaCertificateAuthority(),
+			"aws_acmpca_private_certificate":                          resourceAwsAcmpcaPrivateCertificate(),
 			"aws_ami":                                                 resourceAwsAmi(),
 			"aws_ami_copy":                                            resourceAwsAmiCopy(),
 			"aws_ami_from_instance":                                   resourceAwsAmiFromInstance(),
