@@ -263,11 +263,39 @@ func resourceAwsAcmpcaCertificateAuthority() *schema.Resource {
 					acmpca.CertificateAuthorityTypeSubordinate,
 				}, false),
 			},
+			"validity_length": {
+				Type:     schema.TypeInt,
+				Required: false,
+				ForceNew: true,
+			},
+			"validity_unit": {
+				Type:     schema.TypeString,
+				Required: false,
+				ForceNew: true,
+				ValidateFunc: validation.StringInSlice([]string{
+					acmpca.ValidityPeriodTypeAbsolute,
+					acmpca.ValidityPeriodTypeDays,
+					acmpca.ValidityPeriodTypeEndDate,
+					acmpca.ValidityPeriodTypeMonths,
+					acmpca.ValidityPeriodTypeYears,
+				}, false),
+			},
 		},
 	}
 }
 
 func resourceAwsAcmpcaCertificateAuthorityCreate(d *schema.ResourceData, meta interface{}) error {
+	isRootCA := d.Get("type").(string) == acmpca.CertificateAuthorityTypeRoot
+
+	if isRootCA {
+		if _, ok := d.GetOk("validity_length"); !ok {
+			return fmt.Errorf("validity_length must be set when creating a Certificate Authority with a self-signed root certificate")
+		}
+		if _, ok := d.GetOk("validity_unit"); !ok {
+			return fmt.Errorf("validity_unit must be set when creating a Certificate Authority with a self-signed root certificate")
+		}
+	}
+
 	conn := meta.(*AWSClient).acmpcaconn
 	tags := keyvaluetags.New(d.Get("tags").(map[string]interface{})).IgnoreAws().AcmpcaTags()
 
@@ -321,6 +349,14 @@ func resourceAwsAcmpcaCertificateAuthorityCreate(d *schema.ResourceData, meta in
 	_, err = stateConf.WaitForState()
 	if err != nil {
 		return fmt.Errorf("error waiting for ACMPCA Certificate Authority %q to be active or pending certificate: %s", d.Id(), err)
+	}
+
+	// If we request a ROOT CA, we'll ask AWS to self-sign right away
+	if isRootCA {
+		err = acmpcaCertificateAuthoritySelfSignCert(conn, d)
+		if err != nil {
+			return fmt.Errorf("error self-signing ACMPCA CA Certificate for CA %q of type ROOT: %s", d.Id(), err)
+		}
 	}
 
 	return resourceAwsAcmpcaCertificateAuthorityRead(d, meta)
@@ -517,6 +553,79 @@ func acmpcaCertificateAuthorityRefreshFunc(conn *acmpca.ACMPCA, certificateAutho
 
 		return output.CertificateAuthority, aws.StringValue(output.CertificateAuthority.Status), nil
 	}
+}
+
+func acmpcaCertificateAuthoritySelfSignCert(conn *acmpca.ACMPCA, d *schema.ResourceData) error {
+	// Get CSR
+	getCertificateAuthorityCsrInput := &acmpca.GetCertificateAuthorityCsrInput{
+		CertificateAuthorityArn: aws.String(d.Id()),
+	}
+
+	log.Printf("[DEBUG] Reading ACMPCA Certificate Authority Certificate Signing Request: %s", getCertificateAuthorityCsrInput)
+
+	getCertificateAuthorityCsrOutput, err := conn.GetCertificateAuthorityCsr(getCertificateAuthorityCsrInput)
+	if err != nil {
+		return fmt.Errorf("error reading ACMPCA Certificate Authority Certificate Signing Request: %s", err)
+	}
+
+	csr := aws.StringValue(getCertificateAuthorityCsrOutput.Csr)
+
+	certificateAuthorityConfiguration := d.Get("certificate_authority_configuration").(map[string]interface{})
+
+	// Issue self-signed certificate
+	issueCertificateInput := &acmpca.IssueCertificateInput{
+		CertificateAuthorityArn: aws.String(d.Id()),
+		Csr:                     []byte(csr),
+		IdempotencyToken:        aws.String(resource.UniqueId()),
+		SigningAlgorithm:        aws.String(certificateAuthorityConfiguration["signing_algorithm"].(string)),
+		TemplateArn:             aws.String("arn:aws:acm-pca:::template/RootCACertificate/V1"),
+		Validity: &acmpca.Validity{
+			Type:  aws.String(d.Get("validity_unit").(string)),
+			Value: aws.Int64(int64(d.Get("validity_length").(int))),
+		},
+	}
+
+	log.Printf("[DEBUG] ACMPCA Issue Certificate: %s", issueCertificateInput)
+
+	issueCertificateOutput, err := conn.IssueCertificate(issueCertificateInput)
+	if err != nil {
+		return fmt.Errorf("error issuing ACMPCA Certificate: %s", err)
+	}
+
+	certificateArn := aws.StringValue(issueCertificateOutput.CertificateArn)
+
+	// Wait until certificate is ready
+	getCertificateInput := &acmpca.GetCertificateInput{
+		CertificateArn:          aws.String(certificateArn),
+		CertificateAuthorityArn: aws.String(d.Id()),
+	}
+
+	log.Printf("[DEBUG] ACMPCA Get Certificate: %s", getCertificateInput)
+
+	err = conn.WaitUntilCertificateIssued(getCertificateInput)
+	if err != nil {
+		return fmt.Errorf("error waiting for ACMPCA to issue Certificate %q: %s", certificateArn, err)
+	}
+
+	getCertificateOutput, err := conn.GetCertificate(getCertificateInput)
+	if err != nil {
+		return fmt.Errorf("error retrieving ACMPCA Certificate %q: %s", certificateArn, err)
+	}
+
+	// Import certificate to CA
+	importCertificateAuthorityCertificateInput := &acmpca.ImportCertificateAuthorityCertificateInput{
+		CertificateAuthorityArn: aws.String(d.Id()),
+		Certificate:             []byte(aws.StringValue(getCertificateOutput.Certificate)),
+	}
+
+	log.Printf("[DEBUG] ACMPCA import Certificate Authority Certificate: %s", importCertificateAuthorityCertificateInput)
+
+	_, err = conn.ImportCertificateAuthorityCertificate(importCertificateAuthorityCertificateInput)
+	if err != nil {
+		return fmt.Errorf("error importing ACMPCA Certificate Authority Certificate %q in ACMPCA Certificate Authority %q: %s", certificateArn, d.Id(), err)
+	}
+
+	return nil
 }
 
 func expandAcmpcaASN1Subject(l []interface{}) *acmpca.ASN1Subject {
