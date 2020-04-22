@@ -340,6 +340,7 @@ func Provider() terraform.ResourceProvider {
 			"aws_acm_certificate":                                     resourceAwsAcmCertificate(),
 			"aws_acm_certificate_validation":                          resourceAwsAcmCertificateValidation(),
 			"aws_acmpca_certificate_authority":                        resourceAwsAcmpcaCertificateAuthority(),
+			"aws_acmpca_certificate_authority_certificate_attachment": resourceAwsAcmpcaCertificateAuthorityCertificateAttachment(),
 			"aws_acmpca_private_certificate":                          resourceAwsAcmpcaPrivateCertificate(),
 			"aws_ami":                                                 resourceAwsAmi(),
 			"aws_ami_copy":                                            resourceAwsAmiCopy(),
