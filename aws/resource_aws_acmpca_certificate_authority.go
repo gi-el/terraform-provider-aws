@@ -352,6 +352,12 @@ func resourceAwsAcmpcaCertificateAuthorityRead(d *schema.ResourceData, meta inte
 	}
 	certificateAuthority := describeCertificateAuthorityOutput.CertificateAuthority
 
+	if aws.StringValue(certificateAuthority.Status) == acmpca.CertificateAuthorityStatusDeleted {
+		log.Printf("[WARN] ACMPCA Certificate Authority %q is in DELETED status - removing from state", d.Id())
+		d.SetId("")
+		return nil
+	}
+
 	d.Set("arn", certificateAuthority.Arn)
 
 	if err := d.Set("certificate_authority_configuration", flattenAcmpcaCertificateAuthorityConfiguration(certificateAuthority.CertificateAuthorityConfiguration)); err != nil {
