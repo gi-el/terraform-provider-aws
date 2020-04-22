@@ -23,7 +23,7 @@ func resourceAwsAcmpcaCertificateAuthorityCertificateAttachment() *schema.Resour
 				Required: true,
 				ForceNew: true,
 			},
-			"certificate_body": {
+			"certificate": {
 				Type:      schema.TypeString,
 				Required:  true,
 				ForceNew:  true,
@@ -45,7 +45,7 @@ func resourceAwsAcmpcaCertificateAuthorityCertificateAttachmentCreate(d *schema.
 
 	// Attach the certificate to the CA by importing it
 	input := &acmpca.ImportCertificateAuthorityCertificateInput{
-		Certificate:             []byte(d.Get("certificate_body").(string)),
+		Certificate:             []byte(d.Get("certificate").(string)),
 		CertificateAuthorityArn: aws.String(caARN),
 	}
 
