@@ -265,12 +265,12 @@ func resourceAwsAcmpcaCertificateAuthority() *schema.Resource {
 			},
 			"validity_length": {
 				Type:     schema.TypeInt,
-				Required: false,
+				Optional: true,
 				ForceNew: true,
 			},
 			"validity_unit": {
 				Type:     schema.TypeString,
-				Required: false,
+				Optional: true,
 				ForceNew: true,
 				ValidateFunc: validation.StringInSlice([]string{
 					acmpca.ValidityPeriodTypeAbsolute,
