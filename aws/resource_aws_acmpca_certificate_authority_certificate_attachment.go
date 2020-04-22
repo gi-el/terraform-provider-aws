@@ -21,15 +21,18 @@ func resourceAwsAcmpcaCertificateAuthorityCertificateAttachment() *schema.Resour
 			"certificate_authority_arn": {
 				Type:     schema.TypeString,
 				Required: true,
+				ForceNew: true,
 			},
 			"certificate_body": {
 				Type:      schema.TypeString,
 				Required:  true,
+				ForceNew:  true,
 				StateFunc: normalizeCert,
 			},
 			"certificate_chain": {
 				Type:      schema.TypeString,
 				Optional:  true,
+				ForceNew:  true,
 				StateFunc: normalizeCert,
 			},
 		},
