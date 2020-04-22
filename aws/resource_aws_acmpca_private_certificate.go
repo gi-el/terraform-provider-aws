@@ -145,10 +145,11 @@ func resourceAwsAcmpcaPrivateCertificateCreate(d *schema.ResourceData, meta inte
 
 func resourceAwsAcmpcaPrivateCertificateRead(d *schema.ResourceData, meta interface{}) error {
 	conn := meta.(*AWSClient).acmpcaconn
+	caARN := d.Get("certificate_authority_arn").(string)
 
 	getCertificateInput := &acmpca.GetCertificateInput{
 		CertificateArn:          aws.String(d.Id()),
-		CertificateAuthorityArn: aws.String(d.Get("certificate_authority_arn").(string)),
+		CertificateAuthorityArn: aws.String(caARN),
 	}
 
 	log.Printf("[DEBUG] Reading ACMPCA Certificate: %s", getCertificateInput)
@@ -156,7 +157,12 @@ func resourceAwsAcmpcaPrivateCertificateRead(d *schema.ResourceData, meta interf
 	certificateOutput, err := conn.GetCertificate(getCertificateInput)
 	if err != nil {
 		if isAWSErr(err, acmpca.ErrCodeResourceNotFoundException, "") {
-			log.Printf("[WARN] ACMPCA Certificate %q not found - removing from state", d.Id())
+			log.Printf("[WARN] ACMPCA Certificate %q or ACMPCA Certificate Authority %q not found - removing from state", d.Id(), caARN)
+			d.SetId("")
+			return nil
+		}
+		if isAWSErr(err, acmpca.ErrCodeInvalidStateException, "") {
+			log.Printf("[WARN] ACMPCA Certificate Authority %q not in a state to issue certificates - removing Certificate %q from state", caARN, d.Id())
 			d.SetId("")
 			return nil
 		}
